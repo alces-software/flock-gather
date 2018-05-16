@@ -10,32 +10,63 @@ module Flock
         class << self
           REF = Time.at(1526405203)
 
+          def each_line(start_time, end_time, &block)
+            case ENV['FLOCK_GATHER_MODE']
+            when nil
+              start_s = start_time.strftime("%Y-%m-%d-%H:%M")
+              end_s = end_time.strftime("%Y-%m-%d-%H:%M")
+              IO.popen(
+                {'SLURM_TIME_FORMAT'=>'%s'},
+                ['sacct','-p','-n',"-S#{start_s}","-E#{end_s}",'-X','-ojobid,submit,start,state']
+              ) do |io|
+                while !io.eof? do
+                  block.call(io.readline)
+                end
+              end
+            when 'fixture'
+              IO.popen(['cat',"/tmp/sacct-data/sacct-data-#{start_time.to_i}-#{end_time.to_i}.txt"]) do |io|
+                while !io.eof? do
+                  block.call(io.readline)
+                end
+              end
+            when 'generated'
+              long = ((rand * 2).to_i) + 1
+              (0..rand((end_time-start_time) / 100).to_i).each do |l|
+                state = begin
+                          i = (rand * 4).to_i
+                          if i == 0
+                            'COMPLETED'
+                          elsif i == 1
+                            'FAILED'
+                          elsif i == 2
+                            'CANCELLED by 12345'
+                          else
+                            'PENDING'
+                          end
+                        end
+                submit_t = start_time + (rand * 7200).to_i
+                start_t = submit_t + (rand * (86400/long)).to_i
+                s = [
+                  l.to_s,
+                  submit_t.to_i,
+                  start_t.to_i,
+                  state,
+                  "\n",
+                ]
+                block.call(s.join("|"))
+              end
+            end
+          end
+
           def avg_queue(start_time, end_time)
-            start_s = start_time.strftime("%Y-%m-%d-%H:%M")
-            end_s = end_time.strftime("%Y-%m-%d-%H:%M")
             queue_times = []
 
-            #STDERR.puts ['sacct','-p','-n',"-S#{start_s}","-E#{end_s}",'-X','-ojobid,submit,start,state'].join(' ')
-
-            # data = IO.popen(
-            #          {'SLURM_TIME_FORMAT'=>'%s'},
-            #          ['sacct','-p','-n',"-S#{start_s}","-E#{end_s}",'-X','-ojobid,submit,start,state']
-            # )
-            # File.write("/tmp/sacct-data/sacct-data-#{start_time.to_i}-#{end_time.to_i}.txt", data.read)
-
-            # IO.popen(
-            #          {'SLURM_TIME_FORMAT'=>'%s'},
-            #          ['sacct','-p','-n',"-S#{start_s}","-E#{end_s}",'-X','-ojobid,submit,start,state']
-            #          ) do |io|
-            IO.popen(['cat',"/tmp/sacct-data/sacct-data-#{start_time.to_i}-#{end_time.to_i}.txt"]) do |io|
-              while !io.eof? do
-                line = io.readline
-                jobid, submit, start, state = line.split('|')
-                submit = Time.at(submit.to_i)
-                next if submit < start_time || submit >= end_time
-                start = start == 'Unknown' ? REF : Time.at(start.to_i)
-                queue_times << start - submit
-              end
+            each_line(start_time, end_time) do |line|
+              jobid, submit, start, state = line.split('|')
+              submit = Time.at(submit.to_i)
+              next if submit < start_time || submit >= end_time
+              start = start == 'Unknown' ? REF : Time.at(start.to_i)
+              queue_times << start - submit
             end
 
             total_queue = queue_times.reduce(:+)
@@ -70,6 +101,11 @@ module Flock
             end.join('')
           end
 
+          def transform(v)
+            v
+            #Math.log(v)
+          end
+          
           def spark_cell(val, data, key)
             vals = []
             days = []
@@ -81,7 +117,7 @@ module Flock
                 else
                   day.cyan.bold
                 end
-              vals << Math.log(a[key])
+              vals << transform(a[key])
             end
             avg = (vals.reduce(:+) / vals.length)
             max = vals.max
@@ -104,11 +140,11 @@ module Flock
 
           def colorize(val, base_val, data, key)
             vals = data.map{|d|d[key]}
-            max = Math.log(vals.max)
-            avg = vals.map(&Math.method(:log)).reduce(:+) / vals.length
-            if Math.log(base_val) == max
+            max = transform(vals.max)
+            avg = vals.map(&method(:transform)).reduce(:+) / vals.length
+            if transform(base_val) == max
               val.to_s.red
-            elsif Math.log(base_val) > avg
+            elsif transform(base_val) > avg
               val.to_s.yellow
             else
               val.to_s.green
