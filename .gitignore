@@ -1,0 +1,6 @@
+.bundle
+*~
+*.bak
+vendor/ruby
+tmp
+*.pyc
