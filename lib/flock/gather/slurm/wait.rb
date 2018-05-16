@@ -8,8 +8,15 @@ module Flock
     module Slurm
       module Wait
         class << self
-          REF = Time.at(1526405203)
-
+          def ref
+            case ENV['FLOCK_GATHER_MODE']
+            when 'fixture'
+              Time.at(1526405203)
+            else
+              Time.now
+            end
+          end
+          
           def each_line(start_time, end_time, &block)
             case ENV['FLOCK_GATHER_MODE']
             when nil
@@ -65,7 +72,7 @@ module Flock
               jobid, submit, start, state = line.split('|')
               submit = Time.at(submit.to_i)
               next if submit < start_time || submit >= end_time
-              start = start == 'Unknown' ? REF : Time.at(start.to_i)
+              start = start == 'Unknown' ? ref : Time.at(start.to_i)
               queue_times << start - submit
             end
 
@@ -152,7 +159,7 @@ module Flock
           end
 
           def run
-            t_arr = REF.to_a
+            t_arr = ref.to_a
             t_arr[2] = 0
             t_arr[1] = 0
             t_arr[0] = 0
@@ -213,7 +220,7 @@ module Flock
             Flock::Gather::Comms.new(Gather.endpoint)
               .set('usage.week.wait.max', row[3], Gather.endpoint_auth)
 
-            t_arr = REF.to_a
+            t_arr = ref.to_a
             t_arr[2] = (t_arr[2] / 4) * 4
             t_arr[1] = 0
             t_arr[0] = 0
