@@ -1,0 +1,19 @@
+# Set the timezone appropriately (CentOS AMIs use UTC by default)
+export TZ=Europe/London
+
+# Set where the local endpoint is found (usually port 25271 on localhost)
+export FLOCK_GATHER_ENDPOINT=http://localhost:25271
+
+# Use one of the two below during testing, unless you have Slurm installed
+#export FLOCK_GATHER_MODE=generated
+#export FLOCK_GATHER_MODE=fixture
+
+# Set the password below!
+export FLOCK_GATHER_AUTH=changeme-to-local-password
+
+# Change the paths below as appropriate
+cw_ROOT=/opt/clusterware
+
+cd ${cw_ROOT}/opt/flock-gather
+${cw_ROOT}/opt/ruby/bin/ruby bin/gather slurm/slots
+${cw_ROOT}/opt/ruby/bin/ruby bin/gather slurm/wait
