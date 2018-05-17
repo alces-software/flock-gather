@@ -77,7 +77,11 @@ module Flock
             end
 
             total_queue = queue_times.reduce(:+)
-            avg_queue = total_queue / queue_times.length
+            if queue_times.length > 0
+              avg_queue = total_queue / queue_times.length
+            else
+              avg_queue = 0
+            end
             avg_queue = avg_queue.to_i
             max_queue = queue_times.max
             {

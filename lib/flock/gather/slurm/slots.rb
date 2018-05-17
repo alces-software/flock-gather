@@ -90,6 +90,7 @@ TEXT
             load = 0.0
 
             each_line do |line|
+              break if line == 'No nodes in the system'
               vals = line.split(' ')
               vals.each do |v|
                 key, val = v.split('=')
@@ -104,9 +105,11 @@ TEXT
               end
             end
 
-            load_avg = load / total
-            puts "#{alloc}/#{total} (#{sprintf('%.2f%', (alloc * 100.0) / total)}) [#{sprintf('%.2f',load_avg)}]"
-
+            if total > 0
+              load_avg = load / total
+              puts "#{alloc}/#{total} (#{sprintf('%.2f%', (alloc * 100.0) / total)}) [#{sprintf('%.2f',load_avg)}]"
+            end
+              
             # read last value, increment sparkline
             hist = YAML.load_file('slot-usage-history.yml') rescue []
             hist.pop
@@ -122,9 +125,18 @@ TEXT
             end
             File.write('slot-usage-history.yml',hist.to_yaml)
             slot_utilization = "#{alloc}/#{total} [#{Time.now.strftime("%H:%M")}]"
-            pct_utilization = "#{sprintf('%.1f%', (alloc * 100.0) / total)} utilized"
-            slot_padding = ' ' * (hist.length + 1)
-            pct_padding = ' ' * (slot_utilization.length - pct_utilization.length)
+            if total > 0
+              pct_utilization = "#{sprintf('%.1f%', (alloc * 100.0) / total)} utilized"
+            else
+              pct_utilization = "No slots available"
+            end
+            if slot_utilization.length > pct_utilization.length
+              slot_padding = ' ' * (hist.length + 1)
+              pct_padding = ' ' * (slot_utilization.length - pct_utilization.length)
+            else
+              slot_padding = ' ' * (hist.length + 1)
+              pct_padding = ' '
+            end
             Flock::Gather::Comms.
               new(Gather.endpoint).
               set('usage.capacity',
